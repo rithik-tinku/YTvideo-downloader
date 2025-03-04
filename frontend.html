@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download YouTube Video</title>
+</head>
+<body>
+    <h1>Download YouTube Video</h1>
+    <form id="videoForm">
+        <label for="link">YouTube Link:</label>
+        <input type="text" id="link" name="link" placeholder="Enter YouTube link" required><br><br>
+        <button type="submit">Download</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        document.getElementById("videoForm").addEventListener("submit", async (e) => {
+            e.preventDefault(); // Prevent form default submission
+
+            const link = document.getElementById("link").value; // Get the link from input
+
+            // Create FormData object
+            const formData = new FormData();
+            formData.append("link", link);
+
+            try {
+                const response = await fetch("http://127.0.0.1:8000/download", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                document.getElementById("result").innerText = data.status || data.error;
+            } catch (error) {
+                document.getElementById("result").innerText = `Error: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
