@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #ff0000;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #cc0000;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .error {
+            background-color: #ffe6e6;
+            color: #cc0000;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .success {
+            background-color: #e6ffe6;
+            color: #006600;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .video-preview {
+            margin-top: 20px;
+            display: none;
+        }
+        .video-info {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+            margin: 10px 0;
+        }
+        .loading:after {
+            content: '...';
+            animation: dots 1s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80% { content: '....'; }
+            100% { content: '.....'; }
+        }
+        .download-status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Video Downloader</h1>
+        <form id="videoForm">
+            <div class="input-group">
+                <label for="link">YouTube Link:</label>
+                <input type="text" id="link" name="link" placeholder="Enter YouTube link" required>
+            </div>
+            <button type="submit" id="submitBtn">Get Video Info</button>
+        </form>
+
+        <div id="loading" class="loading">Processing</div>
+
+        <div id="video-preview" class="video-preview">
+            <h3>Video Information</h3>
+            <div class="video-info">
+                <p><strong>Title:</strong> <span id="video-title"></span></p>
+                <p><strong>Duration:</strong> <span id="video-duration"></span></p>
+                <img id="video-thumbnail" style="max-width: 100%; margin-top: 10px;" alt="Video thumbnail" />
+                <button id="downloadBtn" style="margin-top: 15px;">Download Video</button>
+                <div id="download-status" class="download-status"></div>
+            </div>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:8000';
+        const videoForm = document.getElementById('videoForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loading = document.getElementById('loading');
+        const videoPreview = document.getElementById('video-preview');
+        const result = document.getElementById('result');
+
+        function formatDuration(seconds) {
+            if (!seconds) return '00:00';
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hrs ? hrs + ':' : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function showError(message) {
+            result.className = 'error';
+            result.innerText = `Error: ${message}`;
+            result.style.display = 'block';
+            console.error('Error:', message);
+        }
+
+        function showSuccess(message) {
+            result.className = 'success';
+            result.innerText = message;
+            result.style.display = 'block';
+        }
+
+        async function getVideoInfo(link) {
+            const formData = new FormData();
+            formData.append('link', link);
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+                const response = await fetch(`${API_BASE_URL}/video-info`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to get video info');
+                }
+
+                const data = await response.json();
+                if (!data || !data.title) {
+                    throw new Error('Invalid video data received');
+                }
+
+                document.getElementById('video-title').textContent = data.title || 'Unknown Title';
+                document.getElementById('video-duration').textContent = formatDuration(data.duration);
+                if (data.thumbnail) {
+                    document.getElementById('video-thumbnail').src = data.thumbnail;
+                }
+                videoPreview.style.display = 'block';
+                result.style.display = 'none';
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    showError('Request timed out. Please try again.');
+                } else {
+                    showError(error.message);
+                }
+                videoPreview.style.display = 'none';
+            }
+        }
+
+        async function downloadVideo(link) {
+            const formData = new FormData();
+            formData.append('link', link);
+            const downloadStatus = document.getElementById('download-status');
+            downloadStatus.style.display = 'block';
+            downloadStatus.textContent = 'Starting download...';
+            downloadBtn.disabled = true;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout for downloads
+
+                const response = await fetch(`${API_BASE_URL}/download`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Download failed');
+                }
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    downloadStatus.textContent = 'Download completed successfully!';
+                    showSuccess(`Video "${data.title}" has been downloaded successfully!`);
+                    
+                    // Create download link
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = data.path;
+                    downloadLink.textContent = 'Click here to access your downloaded video';
+                    downloadLink.className = 'success';
+                    downloadLink.style.display = 'block';
+                    downloadLink.style.marginTop = '10px';
+                    downloadLink.style.textDecoration = 'none';
+                    downloadStatus.appendChild(downloadLink);
+                } else {
+                    throw new Error('Download failed');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    downloadStatus.textContent = 'Download timed out. Please try again.';
+                    showError('Download timed out. Please try again.');
+                } else {
+                    downloadStatus.textContent = 'Download failed';
+                    showError(error.message);
+                }
+            } finally {
+                downloadBtn.disabled = false;
+            }
+        }
+
+        videoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const link = document.getElementById('link').value.trim();
+            if (!link) {
+                showError('Please enter a YouTube link');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+            videoPreview.style.display = 'none';
+            result.style.display = 'none';
+
+            try {
+                await getVideoInfo(link);
+            } finally {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        downloadBtn.addEventListener('click', async () => {
+            const link = document.getElementById('link').value.trim();
+            if (!link) {
+                showError('Please enter a YouTube link');
+                return;
+            }
+            await downloadVideo(link);
+        });
+    </script>
+</body>
+</html>
